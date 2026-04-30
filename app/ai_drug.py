@@ -122,7 +122,12 @@ def call_ollama(
     model = model or os.getenv("OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL
     url = f"{base}/api/generate"
     body = {"model": model, "prompt": prompt, "stream": False}
-    r = requests.post(url, json=body, timeout=timeout)
+    headers = {}
+    # Ollama Cloud (https://ollama.com) requires an API key for programmatic access.
+    api_key = (os.getenv("OLLAMA_API_KEY") or "").strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    r = requests.post(url, json=body, headers=headers or None, timeout=timeout)
     r.raise_for_status()
     data = r.json()
     return str(data.get("response", "")).strip()
@@ -176,6 +181,13 @@ def summarize_drug_application(record: dict[str, Any]) -> str:
         try:
             return call_ollama(prompt)
         except Exception as e:
+            # Deployed environments (e.g. Posit Connect) often can't access localhost Ollama.
+            # If an OpenAI key is available, fall back automatically.
+            if os.getenv("OPENAI_API_KEY"):
+                try:
+                    return call_openai(prompt)
+                except Exception as e2:
+                    return f"Ollama error: {e}\nOpenAI fallback error: {e2}"
             return (
                 "Could not reach Ollama. Start the server (e.g. ollama serve), pull a model, "
                 f"and check OLLAMA_HOST / OLLAMA_MODEL.\nDetails: {e}"

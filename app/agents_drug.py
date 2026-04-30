@@ -292,11 +292,63 @@ def _ollama_chat(
         "stream": False,
         "options": {"temperature": temperature, "num_predict": 896},
     }
-    r = requests.post(url, json=body, timeout=timeout)
+    headers = {}
+    # Ollama Cloud (https://ollama.com) requires an API key for programmatic access.
+    api_key = (os.getenv("OLLAMA_API_KEY") or "").strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    r = requests.post(url, json=body, headers=headers or None, timeout=timeout)
     r.raise_for_status()
     data = r.json()
-    msg = data.get("message") or {}
-    return {"choices": [{"message": msg}]}
+    # Some Ollama Cloud / proxy setups may return an OpenAI-shaped payload already.
+    if isinstance(data, dict) and isinstance(data.get("choices"), list):
+        return data
+
+    # Ollama native shape: {"message": {"role": "...", "content": "..."}, ...}
+    if isinstance(data, dict) and isinstance(data.get("message"), dict):
+        msg = data.get("message") or {}
+        # If server returned an auth-style payload but with 200, surface it.
+        if not (msg.get("content") or "").strip() and isinstance(data.get("error"), str):
+            signin = data.get("signin_url")
+            extra = f"\nSign in: {signin}" if isinstance(signin, str) and signin else ""
+            raise ValueError(f"Ollama error: {data.get('error')}{extra}")
+        return {"choices": [{"message": msg}]}
+
+    # Unknown shape — return a truncated diagnostic so the UI isn't blank.
+    snippet = str(data)[:1200]
+    raise ValueError(
+        "Unexpected Ollama /api/chat response shape (no 'message' or 'choices'). "
+        f"Host={host} Model={model}\nResponse: {snippet}"
+    )
+
+
+def _ollama_generate(
+    prompt: str,
+    *,
+    temperature: float = 0.35,
+    timeout: float = 90.0,
+) -> str:
+    """
+    POST {OLLAMA_HOST}/api/generate and return the 'response' string.
+    This is a robust fallback when /api/chat returns empty 'content' (e.g. thinking-only payloads).
+    """
+    host = (os.getenv("OLLAMA_HOST") or "http://localhost:11434").rstrip("/")
+    model = os.getenv("OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL
+    url = f"{host}/api/generate"
+    body = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": temperature},
+    }
+    headers = {}
+    api_key = (os.getenv("OLLAMA_API_KEY") or "").strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    r = requests.post(url, json=body, headers=headers or None, timeout=timeout)
+    r.raise_for_status()
+    data = r.json()
+    return str(data.get("response") or "").strip()
 
 
 def _llm_chat(
@@ -316,7 +368,18 @@ def _llm_chat(
 def _message_text(msg: dict[str, Any]) -> str:
     """Extract assistant string from either API shape."""
     c = msg.get("content")
-    return (c or "").strip() if isinstance(c, str) else ""
+    if isinstance(c, str):
+        return (c or "").strip()
+    # Some providers may return a list of content parts; join any string parts.
+    if isinstance(c, list):
+        parts: list[str] = []
+        for p in c:
+            if isinstance(p, str):
+                parts.append(p)
+            elif isinstance(p, dict) and isinstance(p.get("text"), str):
+                parts.append(p["text"])
+        return "\n".join([s.strip() for s in parts if s and s.strip()]).strip()
+    return ""
 
 
 # 7. HTTP ERROR HELPERS — user-readable failures #################################
@@ -384,7 +447,26 @@ def summarize_dashboard_charts(aggregated_chart_data: str) -> str:
     messages = [{"role": "user", "content": prompt}]
     try:
         data = _llm_chat(messages, temperature=0.35, timeout=90.0)
-        return _message_text(data["choices"][0]["message"]).strip()
+        txt = _message_text(data["choices"][0]["message"]).strip()
+        if not txt:
+            # Ollama Cloud can return thinking-only messages (content=""). Fall back to /api/generate.
+            if _llm_backend() != "openai":
+                try:
+                    alt = _ollama_generate(prompt, temperature=0.35, timeout=90.0)
+                    if alt:
+                        return alt
+                except Exception:
+                    pass
+
+            backend = _llm_backend()
+            need = "OLLAMA_API_KEY (for https://ollama.com)" if backend != "openai" else "OPENAI_API_KEY"
+            return (
+                "AI summary returned empty text.\n"
+                f"- Backend: {backend}\n"
+                f"- Check: {need}\n"
+                "If this persists, try a different model or backend."
+            )
+        return txt
     except ValueError as e:
         return str(e)
     except requests.HTTPError as e:
@@ -392,6 +474,13 @@ def summarize_dashboard_charts(aggregated_chart_data: str) -> str:
             return _friendly_openai_http_error(e)
         return _friendly_ollama_http_error(e)
     except requests.RequestException as e:
+        # If Ollama isn't reachable (common on deployed servers), try OpenAI if available.
+        if _llm_backend() != "openai" and os.getenv("OPENAI_API_KEY"):
+            try:
+                data = _openai_chat(messages, temperature=0.35, timeout=90.0)
+                return _message_text(data["choices"][0]["message"]).strip()
+            except Exception as e2:
+                pass
         hint = (
             "If using Ollama: ensure `ollama serve` and a valid OLLAMA_MODEL. "
             "If using OpenAI: set OPENAI_API_KEY."

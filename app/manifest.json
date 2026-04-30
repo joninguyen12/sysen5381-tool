@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "locale": "en_US.UTF-8",
+  "metadata": {
+    "appmode": "python-shiny",
+    "entrypoint": "shiny.express.app:app_5f_drug_2e_py"
+  },
+  "python": {
+    "version": "3.9.7",
+    "package_manager": {
+      "name": "pip",
+      "version": "26.0.1",
+      "package_file": "requirements.txt"
+    }
+  },
+  "environment": {
+    "python": {
+      "requires": "~=3.12.0"
+    }
+  },
+  "files": {
+    "requirements.txt": {
+      "checksum": "38cec00a25fbcef4ec6672211393025c"
+    },
+    ".env": {
+      "checksum": "0ae30287d47bd47dd20686234144420b"
+    },
+    ".env.example": {
+      "checksum": "2580730457aed29aa54b0ce5392d6ee7"
+    },
+    ".gitignore": {
+      "checksum": "0f1ca1b79bc23af9a68c72cde555460b"
+    },
+    ".python-version": {
+      "checksum": "0885a8b0e7355de614d6685033e058f6"
+    },
+    "README.md": {
+      "checksum": "648a0834a682b3eec93bf6e7adbd0d84"
+    },
+    "agents_drug.py": {
+      "checksum": "99a01c86d7fcb251ec3d466cef4b25f0"
+    },
+    "ai_drug.py": {
+      "checksum": "4bb8dd1382aced1b1cae3e32e891d3bf"
+    },
+    "api_drug.py": {
+      "checksum": "22ff4401e079d2227bc052349bdd46b7"
+    },
+    "app_drug.py": {
+      "checksum": "b73b89bc56317565b14b9070ee64d4c3"
+    },
+    "deployme.sh": {
+      "checksum": "60ec81bc3f11bb5860d61492b50348d7"
+    },
+    "env_load.py": {
+      "checksum": "281da1200ed7c41ade845972f522f340"
+    },
+    "manifestme.sh": {
+      "checksum": "935ab0afd94915e03d782208e62bdf16"
+    }
+  }
+}
