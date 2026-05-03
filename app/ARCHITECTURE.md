@@ -80,6 +80,28 @@ flowchart TB
   P5 --> OUT[Shiny: narrative + QC footer]
 ```
 
+### 3.1 Orchestrator agents (dashboard chart AI)
+
+**Agent 1: Planner**  
+- **Role:** Decide what the later steps should do, not write the user-facing story.  
+- **Output:** Strict JSON.
+
+**Agent 2: Data**  
+- **Role:** Gather tool-backed facts beyond the static context string (computed stats + optional API samples).  
+- **Output:** Short bullets + caveats, not the final narrative.
+
+**Agent 3: RAG**  
+- **Role:** Pull interpretation guardrails from the bundled markdown corpus (`rag/drugsfda_dashboard_notes.md`).  
+- **Output:** Ollama tool call to `retrieve_dashboard_notes`, then the model summarizes in a few bullets (what to stress / what not to claim).
+
+**Agent 4: Insight**  
+- **Role:** Write the first full stakeholder draft for the chart-AI box.  
+- **Output:** Markdown-friendly 3–6 sentences or bullets.
+
+**Agent 5: Validator**  
+- **Role:** Quality-control editor on the Insight draft.  
+- **Output:** Revised narrative that becomes what the user sees.
+
 ---
 
 ## 4. Drug info AI (`ai_drug.py`)
