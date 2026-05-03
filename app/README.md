@@ -20,6 +20,8 @@ A **Shiny for Python** dashboard that pulls application-level records from the [
 | `rag/drugsfda_dashboard_notes.md` | Small bundled corpus for dashboard-note retrieval (RAG) |
 | `env_load.py` | Loads `.env` / `.env.txt` from the app directory |
 
+See **[ARCHITECTURE.md](ARCHITECTURE.md)** for updated system diagrams (data flow, chart AI modes, drug AI pipeline, and external services).
+
 ## Prerequisites
 
 - **Python 3.9+** (3.10+ recommended)

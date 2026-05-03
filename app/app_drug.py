@@ -1296,7 +1296,7 @@ with ui.navset_underline(id="main_tabs", selected="dashboard"):
                 "- **Rate limits:** openFDA works without a key; `OPENFDA_API_KEY` improves limits."
             )
         with ui.div(class_="app-about-block"):
-            ui.h4("Quality Control")
+            ui.h4("✅ Quality Control")
             ui.markdown(
                 "This application treats AI text as **assistive reporting**, not a source of truth on its own. Quality control is built in through:\n\n"
                 "**1. Grounding in real FDA data** — Summaries are always tied to **openFDA Drugs@FDA** payloads or chart metrics you already "
