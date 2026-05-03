@@ -4,7 +4,83 @@ This document describes how the **Shiny for Python** app (`app_drug.py`) loads F
 
 ---
 
-## 1. High-level context
+## 1. End-to-end pipeline: openFDA request → user display
+
+This is the **main spine** of the app: which **file** and **function** run from the HTTP call through what the user sees.
+
+### 1.0 Configuration bootstrap
+
+| File | What runs |
+|------|-------------|
+| **`env_load.py`** | Imported by `app_drug.py`, `api_drug.py`, `agents_drug.py`, and `ai_drug.py` so `.env` / `.env.txt` (API keys, hosts, `DASHBOARD_AI_ORCHESTRATOR`, etc.) are loaded before any network or LLM call. |
+
+### 1.1 Step 1 — Request openFDA and normalize JSON
+
+| File | Function | Role |
+|------|----------|------|
+| **`api_drug.py`** | **`fetch_drugsfda(limit, skip=0, …)`** | `requests.get` to `https://api.fda.gov/drug/drugsfda.json` using **`_params()`** (limit ≤ 1000, optional `OPENFDA_API_KEY`). Returns the raw **`payload`** dict. |
+| **`api_drug.py`** | **`extract_results(payload)`** | For each element of `payload["results"]`, calls **`extract_record()`** and returns a **list of application dicts** (`application_number`, `sponsor_name`, `submissions`, `products`, …). |
+
+### 1.2 Step 2 — Store in Shiny reactive state
+
+| File | Function | Role |
+|------|----------|------|
+| **`app_drug.py`** | **`drugs_state()`** (`@reactive.calc`) | Invalidates on **`input.refresh()`** and **`input.fetch_limit()`**. Calls **`fetch_drugsfda`** → **`extract_results`**, returns **`{ ok, records, meta, error }`**. All downstream UI reads **`records`** from here. |
+
+### 1.3 Step 3 — Build the analytics dataframe (charts + chart AI)
+
+| File | Function | Role |
+|------|----------|------|
+| **`app_drug.py`** | **`approved_ap_df()`** | **`_build_approved_submissions_df(st["records"])`** — AP rows with parseable **`submission_status_date`** → **pandas** `DataFrame`. |
+| **`app_drug.py`** | **`filtered_approved_for_charts()`** | Applies **`_filter_year`** and **`_filter_approved_kind`** from sidebar **`year_range`** and **`app_kind_filter`**. **Same `DataFrame`** powers every dashboard chart and the chart-AI context string. |
+
+### 1.4 Step 4 — Draw dashboard charts (user sees figures)
+
+| File | Where | Role |
+|------|-------|------|
+| **`app_drug.py`** | **`@render.ui`** outputs under the **Dashboard** nav | Build Plotly **`go.Figure`** KPIs and charts, **`_chart_layout`**, **`_fig_html`** (Plotly HTML + CDN) inside **bslib** cards. |
+
+### 1.5 Step 5 — Drug Info cards (user sees structured drill-down)
+
+| File | Function | Role |
+|------|----------|------|
+| **`app_drug.py`** | **`_sync_app_select()`** (`@reactive.effect`) | Fills **`input.selected_app`** from **`drugs_state()["records"]`**. |
+| **`app_drug.py`** | **`drug_info_panel()`** (`@render.ui`) | Finds **`rec`** matching **`input.selected_app()`** in **`records`**, then helpers (**`_classify_application_kind`**, **`_flatten_active_ingredients`**, **`_dataframe_table_html`**, …) return **cards / tables** (no second HTTP call — data is already in memory). |
+
+### 1.6 Step 6 — Chart Trends AI (optional)
+
+| File | Function | Role |
+|------|----------|------|
+| **`app_drug.py`** | **`dashboard_chart_ai_panel()`** (`@render.ui`) | **`filtered_approved_for_charts()`** → **`aggregate_full_dashboard_context(...)`** in **`agents_drug.py`** → **`summarize_dashboard_charts(ctx, df=df)`**. |
+| **`agents_drug.py`** | **`summarize_dashboard_charts`** | Orchestrator on: **`summarize_dashboard_charts_tool_rag`** (§3). Else: **`build_chart_explanation_prompt`** + **`_llm_chat`** / **`_ollama_generate`**. |
+| **`app_drug.py`** | **`_ai_markdown_output(txt)`** | Renders the returned Markdown in the **Chart Trends — AI Summary** card. |
+
+### 1.7 Step 7 — Drug Info AI (optional)
+
+| File | Function | Role |
+|------|----------|------|
+| **`app_drug.py`** | **`drug_ai_summary_panel()`** (`@render.ui`) | Same **`rec`** as Drug Info cards → **`summarize_drug_application(rec)`** in **`ai_drug.py`**. |
+| **`ai_drug.py`** | **`summarize_drug_application`** | **`build_insight_prompt`** → insight (**`call_ollama`** / **`call_openai`**) → validator (**`_ollama_chat_messages`** / **`_openai_chat_messages`** with **`_drug_validator_system`** / **`_drug_validator_user`**). Returns **narrative only** (no QC footer block). |
+| **`app_drug.py`** | **`_ai_markdown_output(txt)`** | Renders Markdown in the **AI Summary — Selected Application** card. |
+
+### 1.8 Reactive spine (diagram)
+
+```mermaid
+flowchart TB
+  R[User: Refresh + filters] --> ST[app_drug.py\ndrugs_state]
+  ST --> API[api_drug.py\nfetch_drugsfda → extract_results]
+  API --> ST
+  ST --> DF[app_drug.py\n_build_approved_submissions_df]
+  DF --> FAP[app_drug.py\nfiltered_approved_for_charts]
+  FAP --> CH[Plotly in @render.ui]
+  FAP --> AGG[agents_drug.py\naggregate_full_dashboard_context]
+  AGG --> SUM[agents_drug.py\nsummarize_dashboard_charts]
+  SUM --> UI[app_drug.py\n_ai_markdown_output]
+```
+
+---
+
+## 2. High-level context (systems)
 
 ```mermaid
 flowchart LR
@@ -33,24 +109,7 @@ flowchart LR
   I --> OAI
 ```
 
-**`env_load.py`** loads `.env` / `.env.txt` so API keys and hosts are available before HTTP calls.
-
----
-
-## 2. Runtime data flow (dashboard)
-
-```mermaid
-flowchart TB
-  R[User: Refresh + filters] --> ST[drugs_state reactive:\nfetch_drugsfda → records]
-  ST --> DF[_build_approved_submissions_df\nAP rows + parseable dates]
-  DF --> FAP[filtered_approved_for_charts\nyear + application type]
-  FAP --> CH[Plotly charts + KPI cards]
-  FAP --> AGG[aggregate_full_dashboard_context\nplain-text CONTEXT for AI]
-  AGG --> SUM[summarize_dashboard_charts\nagents_drug.py]
-  SUM --> UI[_ai_markdown_output\nChart Trends card]
-```
-
-- **Single source of truth for charts and chart AI:** the same filtered **AP** dataframe pipeline drives visuals and the aggregated context string.
+**`env_load.py`** loads `.env` / `.env.txt` so API keys and hosts are available before HTTP calls (see §1.0).
 
 ---
 
