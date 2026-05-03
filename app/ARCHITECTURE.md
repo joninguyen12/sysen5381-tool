@@ -67,15 +67,15 @@ This is the **main spine** of the app: which **file** and **function** run from 
 
 ```mermaid
 flowchart TB
-  R[User: Refresh + filters] --> ST[app_drug.py\ndrugs_state]
-  ST --> API[api_drug.py\nfetch_drugsfda → extract_results]
+  R[User Refresh and filters] --> ST[app_drug drugs_state]
+  ST --> API[api_drug fetch and extract]
   API --> ST
-  ST --> DF[app_drug.py\n_build_approved_submissions_df]
-  DF --> FAP[app_drug.py\nfiltered_approved_for_charts]
-  FAP --> CH[Plotly in @render.ui]
-  FAP --> AGG[agents_drug.py\naggregate_full_dashboard_context]
-  AGG --> SUM[agents_drug.py\nsummarize_dashboard_charts]
-  SUM --> UI[app_drug.py\n_ai_markdown_output]
+  ST --> DF[app_drug build AP dataframe]
+  DF --> FAP[app_drug filtered chart rows]
+  FAP --> CH[Plotly charts Shiny render]
+  FAP --> AGG[agents_drug aggregate context]
+  AGG --> SUM[agents_drug summarize charts]
+  SUM --> UI[app_drug markdown output]
 ```
 
 ---
@@ -88,15 +88,15 @@ flowchart LR
     U[Browser]
   end
   subgraph app [Python app]
-    S[Shiny UI\napp_drug.py]
-    A[api_drug.py]
-    G[agents_drug.py]
-    I[ai_drug.py]
+    S[Shiny app_drug]
+    A[api_drug]
+    G[agents_drug]
+    I[ai_drug]
   end
   subgraph external [External services]
-    FDA[(openFDA\nDrugs@FDA API)]
-    OLL[(Ollama\n/api/chat /api/generate)]
-    OAI[(OpenAI\nChat Completions)]
+    FDA[openFDA DrugsFDA API]
+    OLL[Ollama HTTP API]
+    OAI[OpenAI API]
   end
   U <--> S
   S --> A
@@ -123,9 +123,9 @@ flowchart LR
 ```mermaid
 flowchart TB
   subgraph orch [Orchestrator path Ollama only]
-    P1[Planner\nJSON plan]
-    P2[Data agent\ntools + fallback]
-    P3[RAG agent\nretrieve_dashboard_notes]
+    P1[Planner JSON plan]
+    P2[Data agent tools plus fallback]
+    P3[RAG agent retrieve notes]
     P4[Insight]
     P5[Validator]
     P1 --> P2
@@ -134,9 +134,9 @@ flowchart TB
     P3 --> P4
     P4 --> P5
   end
-  CORP[(rag/drugsfda_dashboard_notes.md)] --> P3
-  FDA2[(openFDA tools\noptional)] --> P2
-  P5 --> OUT[Shiny: narrative + QC footer]
+  CORP[RAG markdown corpus] --> P3
+  FDA2[openFDA optional tools] --> P2
+  P5 --> OUT[Shiny narrative and QC footer]
 ```
 
 ### 3.1 Orchestrator agents (dashboard chart AI)
@@ -167,10 +167,10 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  REC[Selected application\nrecord dict] --> CMP[compact_record_for_ai]
-  CMP --> INS[Insight\nOllama /generate or OpenAI chat]
-  INS --> VAL[Validator\nOllama /chat or OpenAI chat]
-  VAL --> CARD[Shiny Drug info card\nreviewed narrative only]
+  REC[Selected application record] --> CMP[compact_record_for_ai]
+  CMP --> INS[Insight Ollama or OpenAI]
+  INS --> VAL[Validator second pass]
+  VAL --> CARD[Shiny Drug info markdown]
 ```
 
 - **Insight** uses a single user prompt with embedded JSON. **Validator** receives the same **APPLICATION_JSON** blob plus the draft; output is the cleaned narrative **without** an appended QC footer (chart orchestrator still can append its own footer).
