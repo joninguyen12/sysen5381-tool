@@ -1,0 +1,12 @@
+{
+    "https://connect.systems-apps.com": {
+        "server_url": "https://connect.systems-apps.com",
+        "filename": "/Users/joninguyen/Desktop/tool2/app",
+        "app_url": "https://connect.systems-apps.com/content/fb4ca0db-4830-47e9-8b41-b0a32947e6b5/",
+        "app_id": "250",
+        "app_guid": "fb4ca0db-4830-47e9-8b41-b0a32947e6b5",
+        "title": "drugsfda-explorer",
+        "app_mode": "python-shiny",
+        "app_store_version": 1
+    }
+}

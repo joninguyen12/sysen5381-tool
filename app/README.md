@@ -2,8 +2,8 @@
 
 A **Shiny for Python** dashboard that pulls application-level records from the [openFDA Drugs@FDA API](https://open.fda.gov/apis/drug/drugsfda/), visualizes approved-drug trends and sponsor activity, and shows structured **Drug info** for a selected application.
 
-- **Dashboard (bottom) → “Chart trends — AI summary”** uses `agents_drug.py`: metrics aligned with **approval-type pie**, **approvals-per-year trend** (peak + optional rolling average), and **top sponsors** (same Top N, metric, and normalization as the bar chart). **Template 3** prompt: 2–3 sentences. Default LLM: **Ollama**; optional **OpenAI** via `AI_BACKEND=openai` and `OPENAI_API_KEY`.
-- **Drug info → “AI summary”** uses `ai_drug.py`: a **simple narrative** of the selected application (JSON context → one LLM call).
+- **Dashboard (bottom) → “Chart trends — AI summary”** uses `agents_drug.py`: metrics aligned with **approval-type pie**, **approvals-per-year trend** (peak + optional rolling average), and **top sponsors** (same Top N, metric, and normalization as the bar chart). **Template 3** prompt: 2–3 sentences. Default LLM: **Ollama**; optional **OpenAI** via `AI_BACKEND=openai` and `OPENAI_API_KEY`. Optional **TOOL2-style** mode: `DASHBOARD_AI_ORCHESTRATOR=1` runs an **Ollama multi-agent** block inside `agents_drug.py` with **tool calling** + bundled markdown **RAG** (`rag/drugsfda_dashboard_notes.md`); per-agent traces go to **server stdout**, while the UI shows the **final** text after a mandatory **Insight → Validator** QC pass (plus an automated **Quality control** footer).
+- **Drug info → “AI summary”** uses `ai_drug.py`: a **draft narrative** from the selected application’s JSON, then a **validator** pass against the same JSON; the card shows the reviewed text only.
 
 ## What it does
 
@@ -15,8 +15,9 @@ A **Shiny for Python** dashboard that pulls application-level records from the [
 |------|------|
 | `app_drug.py` | Shiny Express UI, charts, reactive data |
 | `api_drug.py` | HTTP client for `drug/drugsfda.json`, normalizes records |
-| `ai_drug.py` | Compact record + prompt; **simple Drug info summary** (Ollama or OpenAI) |
-| `agents_drug.py` | **Dashboard chart explanation** (aggregate + Template 3 prompt) |
+| `ai_drug.py` | Compact record + prompt; **Drug info summary** with **Insight → Validator** (Ollama or OpenAI) |
+| `agents_drug.py` | **Dashboard chart explanation** (aggregate + Template 3); optional **Ollama multi-agent + tools + RAG** when `DASHBOARD_AI_ORCHESTRATOR=1` |
+| `rag/drugsfda_dashboard_notes.md` | Small bundled corpus for dashboard-note retrieval (RAG) |
 | `env_load.py` | Loads `.env` / `.env.txt` from the app directory |
 
 ## Prerequisites
@@ -49,7 +50,10 @@ Place **`.env`** (or **`.env.txt`**) in the **`app/`** folder.
 | `OLLAMA_MODEL` | Default `llama3.2:latest` — must match `ollama list` |
 | `OPENAI_API_KEY` | Required if `AI_BACKEND=openai` |
 | `OPENAI_MODEL` | Defaults to `gpt-4o-mini` if unset |
+| `OLLAMA_API_KEY` | Required for **Ollama Cloud** (`OLLAMA_HOST=https://ollama.com`) programmatic API calls |
 | `OPENFDA_API_KEY` | Optional; higher openFDA limits |
+| `DASHBOARD_AI_ORCHESTRATOR` | Set to `1` to enable the optional **Ollama multi-agent tool+RAG** dashboard chart AI (Validator QC runs automatically after a non-empty Insight) |
+| `DASHBOARD_AI_ORCH_PARALLEL` | Default `1`: run **Data + RAG** tool rounds **in parallel** to cut wall time. Set `0` to force sequential calls (e.g. single-worker Ollama) |
 
 The dashboard works without any LLM; AI buttons show errors if Ollama/OpenAI is unavailable.
 
